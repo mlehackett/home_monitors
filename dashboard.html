@@ -2,33 +2,38 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Air Quality</title>
-<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@300;400&display=swap" rel="stylesheet">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Environmental Monitor</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
 <style>
   :root {
     --aqi-color: #00e676;
     --aqi-glow: rgba(0, 230, 118, 0.3);
     --aqi-dim: rgba(0, 230, 118, 0.08);
+    --depth-color: #29b6f6;
+    --depth-glow: rgba(41, 182, 246, 0.35);
     --bg: #060a0f;
     --text: #e8f4f8;
     --muted: rgba(232, 244, 248, 0.4);
+    --muted-dim: rgba(232, 244, 248, 0.22);
+    --label: rgba(232, 244, 248, 0.92);
+    --stale: #ff6e5e;
     --card: rgba(0,0,0,0.45);
     --border: rgba(255,255,255,0.07);
   }
 
-  * { margin: 0; padding: 0; box-sizing: border-box; }
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+  html, body { width: 100%; height: 100%; }
 
   body {
     background: var(--bg);
     color: var(--text);
     font-family: 'DM Mono', monospace;
-    min-height: 100vh;
     overflow: hidden;
     cursor: none;
   }
 
-  /* Photo horizon — fades to transparent at top, full opacity at bottom */
   .horizon-photo {
     position: fixed;
     inset: 0;
@@ -37,322 +42,207 @@
     background-size: cover;
     background-position: center 55%;
     -webkit-mask-image: linear-gradient(to top,
-      rgba(0,0,0,0.92) 0%,
-      rgba(0,0,0,0.75) 20%,
-      rgba(0,0,0,0.3)  50%,
-      rgba(0,0,0,0)    72%
-    );
+      rgba(0,0,0,0.92) 0%, rgba(0,0,0,0.75) 20%,
+      rgba(0,0,0,0.3) 50%, rgba(0,0,0,0) 72%);
     mask-image: linear-gradient(to top,
-      rgba(0,0,0,0.92) 0%,
-      rgba(0,0,0,0.75) 20%,
-      rgba(0,0,0,0.3)  50%,
-      rgba(0,0,0,0)    72%
-    );
+      rgba(0,0,0,0.92) 0%, rgba(0,0,0,0.75) 20%,
+      rgba(0,0,0,0.3) 50%, rgba(0,0,0,0) 72%);
   }
 
-  /* Atmospheric glow */
-  .atmosphere {
-    position: fixed;
-    inset: 0;
-    pointer-events: none;
-    z-index: 1;
-  }
+  .atmosphere { position: fixed; inset: 0; pointer-events: none; z-index: 1; }
   .atmosphere::before {
-    content: '';
-    position: absolute;
-    top: -20%; left: -10%;
-    width: 60%; height: 60%;
+    content: ''; position: absolute; top: -20%; left: -10%; width: 55%; height: 55%;
     background: radial-gradient(ellipse, var(--aqi-glow) 0%, transparent 70%);
-    transition: background 2s ease;
-    animation: breathe 8s ease-in-out infinite;
+    transition: background 2s ease; animation: breathe 8s ease-in-out infinite;
   }
   .atmosphere::after {
-    content: '';
-    position: absolute;
-    bottom: -10%; right: -10%;
-    width: 50%; height: 50%;
-    background: radial-gradient(ellipse, var(--aqi-dim) 0%, transparent 70%);
-    transition: background 2s ease;
-    animation: breathe 8s ease-in-out infinite reverse;
+    content: ''; position: absolute; bottom: -15%; right: -10%; width: 55%; height: 55%;
+    background: radial-gradient(ellipse, var(--depth-glow) 0%, transparent 70%);
+    transition: background 2s ease; animation: breathe 9s ease-in-out infinite reverse;
   }
   @keyframes breathe {
-    0%, 100% { transform: scale(1); opacity: 0.7; }
+    0%, 100% { transform: scale(1); opacity: 0.65; }
     50% { transform: scale(1.15); opacity: 1; }
   }
 
-  canvas {
-    position: fixed;
-    inset: 0;
-    z-index: 2;
-    opacity: 0.4;
-  }
+  canvas#particles { position: fixed; inset: 0; z-index: 2; opacity: 0.35; }
 
   .dashboard {
-    position: relative;
-    z-index: 3;
-    height: 100vh;
+    position: relative; z-index: 3; height: 100vh;
     display: grid;
-    grid-template-rows: auto 1fr auto;
-    padding: 2.5rem 3rem;
-    gap: 1.5rem;
+    grid-template-rows: auto 1fr;
+    padding: 1.4rem 1.8rem 1.6rem;
+    gap: 0.9rem;
   }
 
-  .header {
-    display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-  }
+  .header { display: flex; align-items: baseline; justify-content: space-between; }
   .header-title {
-    font-family: 'Bebas Neue', sans-serif;
-    font-size: 1.1rem;
-    letter-spacing: 0.25em;
-    color: var(--muted);
-    text-transform: uppercase;
+    font-family: 'Bebas Neue', sans-serif; font-size: 1.25rem; letter-spacing: 0.22em;
+    color: var(--label); text-transform: uppercase; display: flex; align-items: center;
   }
-  .header-time {
-    font-size: 0.75rem;
-    color: var(--muted);
-    letter-spacing: 0.1em;
+  .header-right { display: flex; align-items: center; gap: 0.9rem; }
+  .header-time { font-size: 0.72rem; color: var(--muted); letter-spacing: 0.1em; }
+
+  .status-dot {
+    display: inline-block; width: 6px; height: 6px; background: var(--aqi-color);
+    border-radius: 50%; margin-right: 0.5rem; box-shadow: 0 0 6px var(--aqi-color);
+    animation: pulse 2s ease-in-out infinite; transition: background 2s ease, box-shadow 2s ease;
+  }
+  @keyframes pulse { 0%,100% {opacity:1; transform:scale(1);} 50% {opacity:.5; transform:scale(.8);} }
+
+  .main-grid {
+    display: grid;
+    grid-template-columns: 1.5fr 1fr;
+    gap: 1.1rem;
+    min-height: 0;
   }
 
-  .main {
+  .panel {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 1.1rem 1.3rem;
     display: flex;
     flex-direction: column;
-    justify-content: center;
-    align-items: flex-start;
-    gap: 0.5rem;
-  }
-  .level-label {
-    font-family: 'Bebas Neue', sans-serif;
-    font-size: clamp(3rem, 10vw, 6rem);
-    line-height: 0.9;
-    color: var(--aqi-color);
-    text-shadow: 0 0 60px var(--aqi-glow);
-    transition: color 2s ease, text-shadow 2s ease;
-    letter-spacing: 0.02em;
-  }
-  .pm25-display {
-    display: flex;
-    align-items: baseline;
-    gap: 0.5rem;
-    margin-top: 0.5rem;
-  }
-  .pm25-value {
-    font-family: 'Bebas Neue', sans-serif;
-    font-size: clamp(5rem, 20vw, 12rem);
-    line-height: 0.85;
-    color: var(--text);
-    letter-spacing: -0.02em;
-  }
-  .pm25-unit {
-    font-size: 1rem;
-    color: var(--muted);
-    letter-spacing: 0.05em;
-    align-self: flex-end;
-    margin-bottom: 1rem;
+    min-height: 0;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
   }
 
-  .scale-bar { width: 100%; margin-top: 1rem; }
-  .scale-track {
-    height: 6px;
-    border-radius: 3px;
-    background: linear-gradient(to right,
-      #00e676 0%, #ffee58 20%, #ff9800 35%,
-      #f44336 50%, #9c27b0 70%, #7b1a1a 100%
-    );
-    position: relative;
+  .panel-label {
+    font-family: 'Bebas Neue', sans-serif; font-size: 1.1rem; letter-spacing: 0.2em;
+    color: var(--label); text-transform: uppercase; margin-bottom: 0.4rem;
   }
-  .scale-marker {
-    position: absolute;
-    top: 50%;
-    transform: translate(-50%, -50%);
-    width: 14px; height: 14px;
-    background: white;
-    border-radius: 50%;
-    box-shadow: 0 0 12px var(--aqi-color), 0 0 4px white;
-    transition: left 1.5s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 2s ease;
+
+  /* ---- Depth panel ---- */
+  .depth-panel { border-left: 2px solid var(--depth-color); transition: border-left-color 2s ease; }
+  .depth-top { display: flex; align-items: flex-end; justify-content: space-between; gap: 1rem; }
+  .depth-value-row { display: flex; align-items: baseline; gap: 0.5rem; }
+  .depth-value {
+    font-family: 'Bebas Neue', sans-serif; font-size: clamp(3.2rem, 7vw, 5rem);
+    line-height: 0.85; color: var(--depth-color); text-shadow: 0 0 40px var(--depth-glow);
+    transition: color 1s ease, text-shadow 1s ease;
   }
-  .scale-labels {
-    display: flex;
-    justify-content: space-between;
-    margin-top: 0.6rem;
+  .depth-unit { font-size: 0.85rem; color: var(--muted); letter-spacing: 0.05em; margin-bottom: 0.6rem; }
+  .depth-sub-metrics { display: flex; gap: 1.4rem; }
+  .mini-metric { display: flex; flex-direction: column; gap: 0.15rem; }
+  .mini-metric-label { font-size: 0.78rem; letter-spacing: 0.13em; color: var(--label); text-transform: uppercase; }
+  .mini-metric-value { font-family: 'Bebas Neue', sans-serif; font-size: 1.3rem; color: var(--text); }
+
+  .chart-wrap { flex: 1; min-height: 0; margin-top: 0.7rem; position: relative; }
+  .chart-wrap canvas { width: 100%; height: 100%; display: block; }
+  .chart-range-label {
+    position: absolute; bottom: 2px; left: 0; right: 0; display: flex; justify-content: space-between;
+    font-size: 0.55rem; color: var(--muted-dim); letter-spacing: 0.05em; pointer-events: none;
   }
-  .scale-labels span {
-    font-size: 0.55rem;
-    color: var(--muted);
-    letter-spacing: 0.05em;
-    text-transform: uppercase;
+
+  /* ---- Air quality panel ---- */
+  .aqi-panel { border-left: 2px solid var(--aqi-color); transition: border-left-color 2s ease; }
+  .gauge-wrap { display: flex; flex-direction: column; align-items: center; position: relative; }
+  .gauge-wrap svg { width: 100%; height: auto; max-width: 260px; }
+  .gauge-center { position: absolute; top: 52%; left: 50%; transform: translate(-50%, -30%); text-align: center; }
+  .gauge-value {
+    font-family: 'Bebas Neue', sans-serif; font-size: clamp(2.1rem, 5vw, 3.2rem);
+    color: var(--text); line-height: 0.9;
+  }
+  .gauge-unit { font-size: 0.72rem; color: var(--label); letter-spacing: 0.05em; margin-top: 0.1rem; }
+  .gauge-level {
+    font-family: 'Bebas Neue', sans-serif; font-size: 1.05rem; letter-spacing: 0.04em;
+    color: var(--aqi-color); text-shadow: 0 0 24px var(--aqi-glow); margin-top: 0.2rem;
+    transition: color 1s ease, text-shadow 1s ease;
   }
 
   .metrics {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 1rem;
+    display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.7rem; margin-top: 0.6rem;
   }
+
+  .details-box {
+    background: rgba(255,255,255,0.03); border: 1px solid var(--border); border-radius: 10px;
+    padding: 0.6rem 0.8rem; margin-top: 0.7rem; margin-bottom: auto;
+  }
+  .details-label { font-size: 0.78rem; letter-spacing: 0.12em; color: var(--label); text-transform: uppercase; margin-bottom: 0.25rem; }
+  .details-text {
+    font-size: 0.82rem; color: var(--text); line-height: 1.4;
+    white-space: pre-line; max-height: 4.6em; overflow-y: auto;
+  }
+
+  .panel-footer {
+    display: flex; justify-content: space-between; align-items: baseline;
+    border-top: 1px solid var(--border); margin-top: 0.7rem; padding-top: 0.5rem;
+    font-size: 0.7rem; letter-spacing: 0.06em; color: var(--muted);
+  }
+  .panel-footer span:last-child { font-family: 'DM Mono', monospace; color: var(--label); }
+  .panel-footer span.stale { color: var(--stale) !important; }
   .metric {
-    background: var(--card);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 1rem 1.2rem;
-    display: flex;
-    flex-direction: column;
-    gap: 0.3rem;
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
-    transition: border-color 2s ease;
+    background: rgba(255,255,255,0.03); border: 1px solid var(--border); border-radius: 10px;
+    padding: 0.55rem 0.7rem; display: flex; flex-direction: column; gap: 0.15rem;
   }
-  .metric:first-child {
-    border-left: 2px solid var(--aqi-color);
-    transition: border-color 2s ease, border-left-color 2s ease;
-  }
-  .metric-label {
-    font-size: 0.6rem;
-    letter-spacing: 0.15em;
-    color: var(--muted);
-    text-transform: uppercase;
-  }
-  .metric-value {
-    font-family: 'Bebas Neue', sans-serif;
-    font-size: 2rem;
-    line-height: 1;
-    color: var(--text);
-    letter-spacing: 0.02em;
-  }
-  .metric-sub {
-    font-size: 0.6rem;
-    color: var(--muted);
-    letter-spacing: 0.05em;
-  }
+  .metric-label { font-size: 0.78rem; letter-spacing: 0.12em; color: var(--label); text-transform: uppercase; }
+  .metric-value { font-family: 'Bebas Neue', sans-serif; font-size: 1.4rem; line-height: 1; color: var(--text); }
+  .metric-sub { font-size: 0.55rem; color: var(--muted); }
 
-  .status-dot {
-    display: inline-block;
-    width: 6px; height: 6px;
-    background: var(--aqi-color);
-    border-radius: 50%;
-    margin-right: 0.4rem;
-    box-shadow: 0 0 6px var(--aqi-color);
-    animation: pulse 2s ease-in-out infinite;
-    transition: background 2s ease, box-shadow 2s ease;
+  /* ---- Icon buttons ---- */
+  .icon-btn {
+    background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.12); border-radius: 8px;
+    color: var(--muted); font-family: 'DM Mono', monospace; font-size: 0.62rem; letter-spacing: 0.08em;
+    padding: 0.4rem 0.65rem; cursor: pointer; transition: opacity 0.3s ease; opacity: 0.55;
   }
-  @keyframes pulse {
-    0%, 100% { opacity: 1; transform: scale(1); }
-    50% { opacity: 0.5; transform: scale(0.8); }
-  }
-
-  .fullscreen-btn {
-    position: fixed;
-    bottom: 1.2rem; right: 1.2rem;
-    z-index: 100;
-    background: rgba(0,0,0,0.5);
-    border: 1px solid rgba(255,255,255,0.12);
-    border-radius: 8px;
-    color: var(--muted);
-    font-family: 'DM Mono', monospace;
-    font-size: 0.65rem;
-    letter-spacing: 0.1em;
-    padding: 0.5rem 0.8rem;
-    cursor: pointer;
-    transition: opacity 0.3s ease;
-    opacity: 0.5;
-  }
-  .fullscreen-btn:hover, .fullscreen-btn:active { opacity: 1; }
+  .icon-btn:hover, .icon-btn:active { opacity: 1; }
+  .fullscreen-btn { position: fixed; bottom: 1rem; right: 1rem; z-index: 100; }
   .fullscreen-btn.hidden { opacity: 0; pointer-events: none; }
 
-  /* Login screen */
+  /* ---- Settings panel ---- */
+  .settings-panel {
+    position: fixed; top: 3.2rem; right: 1.8rem; z-index: 200;
+    background: rgba(6,10,15,0.96); border: 1px solid var(--border); border-radius: 12px;
+    padding: 1rem 1.1rem; width: 220px; display: none; flex-direction: column; gap: 0.7rem;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+  }
+  .settings-panel.open { display: flex; }
+  .settings-title { font-family: 'Bebas Neue', sans-serif; letter-spacing: 0.15em; font-size: 0.75rem; color: var(--muted); }
+  .settings-field { display: flex; flex-direction: column; gap: 0.3rem; }
+  .settings-field label { font-size: 0.6rem; color: var(--muted); letter-spacing: 0.05em; }
+  .settings-field input {
+    background: rgba(255,255,255,0.05); border: 1px solid var(--border); border-radius: 6px;
+    color: var(--text); font-family: 'DM Mono', monospace; font-size: 0.85rem; padding: 0.4rem 0.5rem;
+  }
+  .settings-save {
+    background: var(--depth-color); color: #04121a; border: none; border-radius: 6px;
+    font-family: 'Bebas Neue', sans-serif; letter-spacing: 0.1em; font-size: 0.8rem;
+    padding: 0.5rem; cursor: pointer;
+  }
+
+  /* ---- Login screen (shared credentials) ---- */
   .login-screen {
-    position: fixed;
-    inset: 0;
-    z-index: 1000;
-    background: rgba(6, 10, 15, 0.97);
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 1.5rem;
+    position: fixed; inset: 0; z-index: 1000; background: rgba(6,10,15,0.97);
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1.5rem;
   }
   .login-screen.hidden { display: none; }
-  .login-title {
-    font-family: 'Bebas Neue', sans-serif;
-    font-size: 2rem;
-    letter-spacing: 0.2em;
-    color: var(--aqi-color);
-    text-shadow: 0 0 40px var(--aqi-glow);
-  }
-  .login-subtitle {
-    font-size: 0.7rem;
-    color: var(--muted);
-    letter-spacing: 0.1em;
-    margin-top: -1rem;
-  }
-  .login-form {
-    display: flex;
-    flex-direction: column;
-    gap: 0.8rem;
-    width: 280px;
-  }
-  .login-field {
-    display: flex;
-    flex-direction: column;
-    gap: 0.3rem;
-  }
-  .login-field label {
-    font-size: 0.6rem;
-    letter-spacing: 0.15em;
-    color: var(--muted);
-    text-transform: uppercase;
-  }
+  .login-title { font-family: 'Bebas Neue', sans-serif; font-size: 1.6rem; letter-spacing: 0.15em; color: var(--text); }
+  .login-subtitle { font-size: 0.75rem; color: var(--muted); letter-spacing: 0.08em; margin-top: -1rem; }
+  .login-form { display: flex; flex-direction: column; gap: 0.9rem; width: 260px; }
+  .login-field { display: flex; flex-direction: column; gap: 0.35rem; }
+  .login-field label { font-size: 0.62rem; color: var(--muted); letter-spacing: 0.08em; }
   .login-field input {
-    background: rgba(255,255,255,0.05);
-    border: 1px solid rgba(255,255,255,0.12);
-    border-radius: 8px;
-    color: var(--text);
-    font-family: 'DM Mono', monospace;
-    font-size: 0.85rem;
-    padding: 0.6rem 0.8rem;
-    outline: none;
-    transition: border-color 0.2s;
-  }
-  .login-field input:focus {
-    border-color: var(--aqi-color);
+    background: rgba(255,255,255,0.05); border: 1px solid var(--border); border-radius: 8px;
+    color: var(--text); font-family: 'DM Mono', monospace; font-size: 0.9rem; padding: 0.6rem 0.7rem;
   }
   .login-btn {
-    margin-top: 0.4rem;
-    background: var(--aqi-color);
-    border: none;
-    border-radius: 8px;
-    color: #060a0f;
-    font-family: 'Bebas Neue', sans-serif;
-    font-size: 1.1rem;
-    letter-spacing: 0.15em;
-    padding: 0.7rem;
-    cursor: pointer;
-    transition: opacity 0.2s;
+    background: var(--aqi-color); color: #04120a; border: none; border-radius: 8px;
+    font-family: 'Bebas Neue', sans-serif; letter-spacing: 0.1em; font-size: 0.95rem;
+    padding: 0.65rem; cursor: pointer; margin-top: 0.3rem;
   }
-  .login-btn:hover { opacity: 0.85; }
-  .login-error {
-    font-size: 0.65rem;
-    color: #f44336;
-    letter-spacing: 0.05em;
-    text-align: center;
-    min-height: 1em;
-  }
+  .login-error { font-size: 0.62rem; color: #f44336; letter-spacing: 0.05em; text-align: center; min-height: 1em; }
   .login-reset {
-    font-size: 0.6rem;
-    color: var(--muted);
-    letter-spacing: 0.08em;
-    cursor: pointer;
-    text-decoration: underline;
-    background: none;
-    border: none;
-    color: var(--muted);
-    font-family: 'DM Mono', monospace;
+    font-size: 0.6rem; color: var(--muted); letter-spacing: 0.08em; cursor: pointer;
+    text-decoration: underline; background: none; border: none; font-family: 'DM Mono', monospace;
   }
 </style>
 </head>
 <body>
 
 <div class="login-screen" id="loginScreen">
-  <div class="login-title">Air Quality Monitor</div>
+  <div class="login-title">Environmental Monitor</div>
   <div class="login-subtitle">Enter your Adafruit IO credentials</div>
   <div class="login-form">
     <div class="login-field">
@@ -372,70 +262,144 @@
 <div class="horizon-photo"></div>
 <div class="atmosphere"></div>
 <canvas id="particles"></canvas>
-<button class="fullscreen-btn" id="fsBtn" onclick="toggleFullscreen()">⛶ FULLSCREEN</button>
+
+<button class="icon-btn fullscreen-btn" id="fsBtn" onclick="toggleFullscreen()">⛶ FULLSCREEN</button>
+
+<div class="settings-panel" id="settingsPanel">
+  <div class="settings-title">SETTINGS</div>
+  <div class="settings-field">
+    <label>Depth offset (ft) — added to sensor reading</label>
+    <input type="number" step="0.1" id="depthOffsetInput">
+  </div>
+  <div class="settings-field">
+    <label>Refresh interval (sec)</label>
+    <input type="number" step="5" id="refreshIntervalInput">
+  </div>
+  <button class="settings-save" onclick="saveSettings()">Save</button>
+</div>
 
 <div class="dashboard">
 
   <div class="header">
-    <div class="header-title">
-      <span class="status-dot"></span>
-      Air Quality Monitor
+    <div class="header-title"><span class="status-dot"></span>Environmental Monitor</div>
+    <div class="header-right">
+      <button class="icon-btn" onclick="toggleSettings()">⚙ SETTINGS</button>
+      <div class="header-time" id="clockDisplay">--:-- --</div>
     </div>
-    <div class="header-time" id="clockDisplay">--:-- --</div>
   </div>
 
-  <div class="main">
-    <div class="level-label" id="levelLabel">––––</div>
-    <div class="pm25-display">
-      <div class="pm25-value" id="pm25Value">–.–</div>
-      <div class="pm25-unit">μg/m³<br>PM2.5</div>
-    </div>
-    <div class="scale-bar">
-      <div class="scale-track">
-        <div class="scale-marker" id="scaleMarker" style="left:0%"></div>
+  <div class="main-grid">
+
+    <!-- DEPTH PANEL -->
+    <div class="panel depth-panel">
+      <div class="panel-label">River Depth</div>
+      <div class="depth-top">
+        <div class="depth-value-row">
+          <div class="depth-value" id="depthValue">–.–</div>
+          <div class="depth-unit">FT</div>
+        </div>
+        <div class="depth-sub-metrics">
+          <div class="mini-metric">
+            <div class="mini-metric-label">Water Temp</div>
+            <div class="mini-metric-value" id="waterTempValue">–.–°F</div>
+          </div>
+          <div class="mini-metric">
+            <div class="mini-metric-label">48H Range</div>
+            <div class="mini-metric-value" id="depthRangeValue">–.– / –.–</div>
+          </div>
+        </div>
       </div>
-      <div class="scale-labels">
-        <span>Good</span>
-        <span>Moderate</span>
-        <span>Sensitive</span>
-        <span>Unhealthy</span>
-        <span>Very</span>
-        <span>Hazardous</span>
+      <div class="chart-wrap">
+        <canvas id="depthChart"></canvas>
+        <div class="chart-range-label"><span id="chartStartLabel">–48h</span><span id="chartEndLabel">now</span></div>
+      </div>
+      <div class="panel-footer">
+        <span>Last update (sensor_depth)</span>
+        <span id="depthLastUpdate">–</span>
       </div>
     </div>
-  </div>
 
-  <div class="metrics">
-    <div class="metric">
-      <div class="metric-label">Temperature</div>
-      <div class="metric-value" id="tempValue">–.–</div>
-      <div class="metric-sub">°F</div>
+    <!-- AIR QUALITY PANEL -->
+    <div class="panel aqi-panel">
+      <div class="panel-label">Air Quality</div>
+      <div class="gauge-wrap">
+        <svg id="gaugeSvg" viewBox="0 0 240 140">
+          <g id="gaugeBands"></g>
+          <line id="gaugeNeedle" x1="120" y1="120" x2="120" y2="40" stroke="white" stroke-width="3" stroke-linecap="round" style="transform-origin:120px 120px; transition: transform 1.5s cubic-bezier(0.34,1.56,0.64,1);"/>
+          <circle cx="120" cy="120" r="7" fill="white"/>
+        </svg>
+        <div class="gauge-center">
+          <div class="gauge-value" id="pm25Value">–.–</div>
+          <div class="gauge-unit">μg/m³ PM2.5</div>
+          <div class="gauge-level" id="levelLabel">––––</div>
+        </div>
+      </div>
+      <div class="metrics">
+        <div class="metric">
+          <div class="metric-label">Temperature</div>
+          <div class="metric-value" id="tempValue">–.–</div>
+          <div class="metric-sub">°F</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">Humidity</div>
+          <div class="metric-value" id="humValue">–.–</div>
+          <div class="metric-sub">% RH</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">PM10</div>
+          <div class="metric-value" id="pm10Value">–.–</div>
+          <div class="metric-sub">μg/m³</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">PM100</div>
+          <div class="metric-value" id="pm100Value">–.–</div>
+          <div class="metric-sub">μg/m³</div>
+        </div>
+      </div>
+      <div class="details-box">
+        <div class="details-label">Details</div>
+        <div class="details-text" id="detailsValue">–</div>
+      </div>
+      <div class="panel-footer">
+        <span>Last update (PM2.5)</span>
+        <span id="aqiLastUpdate">–</span>
+      </div>
     </div>
-    <div class="metric">
-      <div class="metric-label">Humidity</div>
-      <div class="metric-value" id="humValue">–.–</div>
-      <div class="metric-sub">% RH</div>
-    </div>
-    <div class="metric">
-      <div class="metric-label">PM10</div>
-      <div class="metric-value" id="pm10Value">–.–</div>
-      <div class="metric-sub">μg/m³</div>
-    </div>
-    <div class="metric">
-      <div class="metric-label">PM100</div>
-      <div class="metric-value" id="pm100Value">–.–</div>
-      <div class="metric-sub">μg/m³</div>
-    </div>
-  </div>
 
+  </div>
 </div>
 
 <script>
-const REFRESH_INTERVAL = 60000;
-let AIO_KEY  = '';
+/* ================= CONFIG ================= */
+const CONFIG = {
+  refreshIntervalMs: 60000,
+  depthHistoryHours: 48,
+  depthOffsetFt: 18,        // actual river depth = sensor_depth + this offset (editable via Settings)
+  staleAfterMs: 15 * 60 * 1000, // flag a panel's Last Update as stale after this long
+  feeds: {
+    pm25: 'aqi.pm25',
+    pm10: 'aqi.pm10',
+    pm100: 'aqi.pm100',
+    temp: 'aqi.temp',
+    humidity: 'aqi.humidity',
+    details: 'aqi.details',
+    depth: 'depth.sensor-depth',
+    waterTemp: 'depth.water-temperature',
+  }
+};
+
+// Load any saved overrides
+(function loadConfigOverrides() {
+  const savedOffset = localStorage.getItem('depthOffsetFt');
+  if (savedOffset !== null) CONFIG.depthOffsetFt = parseFloat(savedOffset);
+  const savedInterval = localStorage.getItem('refreshIntervalMs');
+  if (savedInterval !== null) CONFIG.refreshIntervalMs = parseInt(savedInterval, 10);
+})();
+
+let AIO_KEY = '';
 let AIO_USER = '';
 
-// Login / credential management
+/* ================= Login / credentials ================= */
 function doLogin() {
   const user = document.getElementById('loginUser').value.trim();
   const key  = document.getElementById('loginKey').value.trim();
@@ -443,62 +407,84 @@ function doLogin() {
     document.getElementById('loginError').textContent = 'Both fields are required.';
     return;
   }
-  AIO_USER = user;
-  AIO_KEY  = key;
+  AIO_USER = user; AIO_KEY = key;
   localStorage.setItem('aio_user', user);
   localStorage.setItem('aio_key', key);
   document.getElementById('loginScreen').classList.add('hidden');
   startDashboard();
 }
-
 function resetCredentials() {
   localStorage.removeItem('aio_user');
   localStorage.removeItem('aio_key');
   document.getElementById('loginUser').value = '';
-  document.getElementById('loginKey').value  = '';
+  document.getElementById('loginKey').value = '';
   document.getElementById('loginError').textContent = '';
   document.getElementById('loginScreen').classList.remove('hidden');
 }
-
-// Allow Enter key to submit login
 document.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter' && !document.getElementById('loginScreen').classList.contains('hidden')) {
-    doLogin();
-  }
+  if (e.key === 'Enter' && !document.getElementById('loginScreen').classList.contains('hidden')) doLogin();
 });
-
-// Check for saved credentials on load
 window.addEventListener('load', () => {
   const user = localStorage.getItem('aio_user');
   const key  = localStorage.getItem('aio_key');
   if (user && key) {
-    AIO_USER = user;
-    AIO_KEY  = key;
+    AIO_USER = user; AIO_KEY = key;
     document.getElementById('loginScreen').classList.add('hidden');
     startDashboard();
   }
 });
 
-function startDashboard() {
-  resizeCanvas(); initParticles(); animateParticles();
-  updateClock();
-  setInterval(updateClock, 1000);
-  refresh();
-  setInterval(refresh, REFRESH_INTERVAL);
+/* ================= Settings panel ================= */
+function toggleSettings() {
+  const panel = document.getElementById('settingsPanel');
+  document.getElementById('depthOffsetInput').value = CONFIG.depthOffsetFt;
+  document.getElementById('refreshIntervalInput').value = CONFIG.refreshIntervalMs / 1000;
+  panel.classList.toggle('open');
+}
+function saveSettings() {
+  const offset = parseFloat(document.getElementById('depthOffsetInput').value);
+  const interval = parseInt(document.getElementById('refreshIntervalInput').value, 10);
+  if (!isNaN(offset)) { CONFIG.depthOffsetFt = offset; localStorage.setItem('depthOffsetFt', offset); }
+  if (!isNaN(interval) && interval > 0) {
+    CONFIG.refreshIntervalMs = interval * 1000;
+    localStorage.setItem('refreshIntervalMs', CONFIG.refreshIntervalMs);
+  }
+  document.getElementById('settingsPanel').classList.remove('open');
+  refresh(); refreshDepthHistory();
 }
 
+/* ================= Dashboard bootstrap ================= */
+function startDashboard() {
+  resizeCanvas(); initParticles(); animateParticles();
+  resizeChart();
+  updateClock(); setInterval(updateClock, 1000);
+  refresh(); refreshDepthHistory();
+  setInterval(refresh, CONFIG.refreshIntervalMs);
+  setInterval(refreshDepthHistory, CONFIG.refreshIntervalMs);
+}
+
+/* ================= EPA PM2.5 levels ================= */
 const EPA_LEVELS = [
-  { label: 'Good',                    upper: 12.0,  color: '#00e676', glow: 'rgba(0,230,118,0.3)',  dim: 'rgba(0,230,118,0.08)',  pct: 8  },
-  { label: 'Moderate',                upper: 35.0,  color: '#ffee58', glow: 'rgba(255,238,88,0.3)', dim: 'rgba(255,238,88,0.08)', pct: 26 },
-  { label: 'Unhealthy for Sensitive', upper: 55.0,  color: '#ff9800', glow: 'rgba(255,152,0,0.3)',  dim: 'rgba(255,152,0,0.08)',  pct: 40 },
-  { label: 'Unhealthy',               upper: 150.0, color: '#f44336', glow: 'rgba(244,67,54,0.3)',  dim: 'rgba(244,67,54,0.08)',  pct: 55 },
-  { label: 'Very Unhealthy',          upper: 250.0, color: '#9c27b0', glow: 'rgba(156,39,176,0.3)', dim: 'rgba(156,39,176,0.08)', pct: 75 },
-  { label: 'Hazardous',               upper: 9999,  color: '#c62828', glow: 'rgba(198,40,40,0.3)',  dim: 'rgba(198,40,40,0.08)',  pct: 93 },
+  { label: 'Good',                    lower: 0,    upper: 12.0,  color: '#00e676', glow: 'rgba(0,230,118,0.3)',  dim: 'rgba(0,230,118,0.08)',  pctUpper: 8   },
+  { label: 'Moderate',                lower: 12.0, upper: 35.0,  color: '#ffee58', glow: 'rgba(255,238,88,0.3)', dim: 'rgba(255,238,88,0.08)', pctUpper: 26  },
+  { label: 'Unhealthy for Sensitive', lower: 35.0, upper: 55.0,  color: '#ff9800', glow: 'rgba(255,152,0,0.3)',  dim: 'rgba(255,152,0,0.08)',  pctUpper: 40  },
+  { label: 'Unhealthy',               lower: 55.0, upper: 150.0, color: '#f44336', glow: 'rgba(244,67,54,0.3)',  dim: 'rgba(244,67,54,0.08)',  pctUpper: 55  },
+  { label: 'Very Unhealthy',          lower: 150.0,upper: 250.0, color: '#9c27b0', glow: 'rgba(156,39,176,0.3)', dim: 'rgba(156,39,176,0.08)', pctUpper: 75  },
+  { label: 'Hazardous',               lower: 250.0,upper: 500.0, color: '#c62828', glow: 'rgba(198,40,40,0.3)',  dim: 'rgba(198,40,40,0.08)',  pctUpper: 100 },
 ];
 
 function findLevel(pm25) {
   for (const lvl of EPA_LEVELS) { if (pm25 < lvl.upper) return lvl; }
   return EPA_LEVELS[EPA_LEVELS.length - 1];
+}
+// Continuous 0-100 position across the whole scale (for smooth gauge motion)
+function pm25ToPct(pm25) {
+  const lvl = findLevel(pm25);
+  const idx = EPA_LEVELS.indexOf(lvl);
+  const pctLower = idx === 0 ? 0 : EPA_LEVELS[idx - 1].pctUpper;
+  const span = lvl.upper - lvl.lower;
+  const frac = span > 0 ? Math.min(1, Math.max(0, (pm25 - lvl.lower) / span)) : 1;
+  return pctLower + frac * (lvl.pctUpper - pctLower);
 }
 
 function applyLevel(level) {
@@ -506,24 +492,79 @@ function applyLevel(level) {
   r.style.setProperty('--aqi-color', level.color);
   r.style.setProperty('--aqi-glow', level.glow);
   r.style.setProperty('--aqi-dim', level.dim);
-  document.getElementById('scaleMarker').style.left = level.pct + '%';
-  document.getElementById('scaleMarker').style.boxShadow = `0 0 12px ${level.color}, 0 0 4px white`;
 }
 
-async function fetchFeed(feed) {
+/* ---- Build the gauge band arcs once ---- */
+function polarToCartesian(cx, cy, r, angleDeg) {
+  const a = (angleDeg - 180) * Math.PI / 180;
+  return { x: cx + r * Math.cos(a), y: cy + r * Math.sin(a) };
+}
+function describeArc(cx, cy, r, startAngle, endAngle) {
+  const start = polarToCartesian(cx, cy, r, endAngle);
+  const end = polarToCartesian(cx, cy, r, startAngle);
+  const largeArc = endAngle - startAngle <= 180 ? 0 : 1;
+  return `M ${start.x} ${start.y} A ${r} ${r} 0 ${largeArc} 0 ${end.x} ${end.y}`;
+}
+function buildGaugeBands() {
+  const g = document.getElementById('gaugeBands');
+  const cx = 120, cy = 120, r = 92;
+  let prevPct = 0;
+  let svg = '';
+  for (const lvl of EPA_LEVELS) {
+    const startAngle = prevPct / 100 * 180;
+    const endAngle = lvl.pctUpper / 100 * 180;
+    svg += `<path d="${describeArc(cx, cy, r, startAngle, endAngle)}" stroke="${lvl.color}" stroke-width="16" fill="none" stroke-linecap="butt" opacity="0.85"/>`;
+    prevPct = lvl.pctUpper;
+  }
+  g.innerHTML = svg;
+}
+function setGaugeNeedle(pct) {
+  const angle = (pct / 100) * 180 - 90; // -90..+90, 0 = straight up
+  document.getElementById('gaugeNeedle').style.transform = `rotate(${angle}deg)`;
+}
+
+/* ================= Fetch helpers ================= */
+async function fetchLastRaw(feed) {
   const r = await fetch(`https://io.adafruit.com/api/v2/${AIO_USER}/feeds/${feed}/data/last`, {
     headers: { 'X-AIO-Key': AIO_KEY }
   });
-  if (!r.ok) throw new Error(`HTTP ${r.status}`);
-  return parseFloat((await r.json()).value);
+  if (!r.ok) throw new Error(`HTTP ${r.status} on ${feed}`);
+  const json = await r.json();
+  return { value: json.value, createdAt: new Date(json.created_at) };
+}
+async function fetchLast(feed) {
+  return parseFloat((await fetchLastRaw(feed)).value);
+}
+async function fetchHistory(feed, hours) {
+  const startTime = new Date(Date.now() - hours * 3600 * 1000).toISOString();
+  const url = `https://io.adafruit.com/api/v2/${AIO_USER}/feeds/${feed}/data?start_time=${encodeURIComponent(startTime)}&limit=1000`;
+  const r = await fetch(url, { headers: { 'X-AIO-Key': AIO_KEY } });
+  if (!r.ok) throw new Error(`HTTP ${r.status} on ${feed} history`);
+  const data = await r.json();
+  return data
+    .map(d => ({ t: new Date(d.created_at), v: parseFloat(d.value) }))
+    .filter(d => !isNaN(d.v))
+    .sort((a, b) => a.t - b.t);
+}
+
+/* ================= Point-in-time refresh (AQI + water temp + depth current) ================= */
+function renderLastUpdate(elId, createdAt) {
+  const el = document.getElementById(elId);
+  el.textContent = createdAt.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', second: '2-digit' });
+  const age = Date.now() - createdAt.getTime();
+  el.classList.toggle('stale', age > CONFIG.staleAfterMs);
 }
 
 async function refresh() {
   try {
-    const [pm25, pm10, pm100, temp, hum] = await Promise.all([
-      fetchFeed('aqi.pm25'), fetchFeed('aqi.pm10'), fetchFeed('aqi.pm100'),
-      fetchFeed('aqi.temp'), fetchFeed('aqi.humidity'),
+    const [pm25Raw, pm10, pm100, temp, hum, detailsRaw, depthRaw, waterTemp] = await Promise.all([
+      fetchLastRaw(CONFIG.feeds.pm25), fetchLast(CONFIG.feeds.pm10), fetchLast(CONFIG.feeds.pm100),
+      fetchLast(CONFIG.feeds.temp), fetchLast(CONFIG.feeds.humidity),
+      fetchLastRaw(CONFIG.feeds.details),
+      fetchLastRaw(CONFIG.feeds.depth), fetchLast(CONFIG.feeds.waterTemp),
     ]);
+
+    const pm25 = parseFloat(pm25Raw.value);
     const level = findLevel(pm25);
     document.getElementById('pm25Value').textContent  = pm25.toFixed(1);
     document.getElementById('pm10Value').textContent  = pm10.toFixed(1);
@@ -532,9 +573,114 @@ async function refresh() {
     document.getElementById('humValue').textContent   = hum.toFixed(1);
     document.getElementById('levelLabel').textContent = level.label;
     applyLevel(level);
-  } catch(e) { console.error('Fetch error:', e); }
+    setGaugeNeedle(pm25ToPct(pm25));
+    document.getElementById('detailsValue').textContent = detailsRaw.value || '\u2013';
+    renderLastUpdate('aqiLastUpdate', pm25Raw.createdAt);
+
+    const sensorDepth = parseFloat(depthRaw.value);
+    const riverDepth = sensorDepth + CONFIG.depthOffsetFt;
+    document.getElementById('depthValue').textContent = riverDepth.toFixed(1);
+    document.getElementById('waterTempValue').textContent = waterTemp.toFixed(1) + '\u00b0F';
+    renderLastUpdate('depthLastUpdate', depthRaw.createdAt);
+  } catch (e) { console.error('Fetch error:', e); }
 }
 
+/* ================= 48h depth history + chart ================= */
+let depthHistoryCache = [];
+
+async function refreshDepthHistory() {
+  try {
+    const raw = await fetchHistory(CONFIG.feeds.depth, CONFIG.depthHistoryHours);
+    depthHistoryCache = raw.map(d => ({ t: d.t, v: d.v + CONFIG.depthOffsetFt }));
+    drawDepthChart();
+  } catch (e) { console.error('History fetch error:', e); }
+}
+
+const depthCanvas = document.getElementById('depthChart');
+const depthCtx = depthCanvas.getContext('2d');
+
+function resizeChart() {
+  const wrap = depthCanvas.parentElement;
+  const dpr = window.devicePixelRatio || 1;
+  depthCanvas.width = wrap.clientWidth * dpr;
+  depthCanvas.height = wrap.clientHeight * dpr;
+  depthCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  drawDepthChart();
+}
+
+function drawDepthChart() {
+  const w = depthCanvas.clientWidth, h = depthCanvas.clientHeight;
+  depthCtx.clearRect(0, 0, w, h);
+  if (depthHistoryCache.length < 2) return;
+
+  const padL = 34, padR = 6, padT = 10, padB = 4;
+  const plotW = w - padL - padR, plotH = h - padT - padB;
+
+  const values = depthHistoryCache.map(d => d.v);
+  let vMin = Math.min(...values), vMax = Math.max(...values);
+  if (vMax - vMin < 0.5) { vMin -= 0.5; vMax += 0.5; }
+  const vPad = (vMax - vMin) * 0.12;
+  vMin -= vPad; vMax += vPad;
+
+  const tStart = depthHistoryCache[0].t.getTime();
+  const tEnd = depthHistoryCache[depthHistoryCache.length - 1].t.getTime();
+  const tSpan = Math.max(1, tEnd - tStart);
+
+  const xFor = t => padL + ((t - tStart) / tSpan) * plotW;
+  const yFor = v => padT + (1 - (v - vMin) / (vMax - vMin)) * plotH;
+
+  const depthColor = getComputedStyle(document.documentElement).getPropertyValue('--depth-color').trim() || '#29b6f6';
+
+  // gridlines (3 horizontal)
+  depthCtx.strokeStyle = 'rgba(255,255,255,0.06)';
+  depthCtx.lineWidth = 1;
+  depthCtx.font = "10px 'DM Mono', monospace";
+  depthCtx.fillStyle = 'rgba(232,244,248,0.35)';
+  for (let i = 0; i <= 2; i++) {
+    const v = vMin + (vMax - vMin) * (i / 2);
+    const y = yFor(v);
+    depthCtx.beginPath();
+    depthCtx.moveTo(padL, y);
+    depthCtx.lineTo(w - padR, y);
+    depthCtx.stroke();
+    depthCtx.fillText(v.toFixed(1), 2, y + 3);
+  }
+
+  // area fill
+  depthCtx.beginPath();
+  depthCtx.moveTo(xFor(depthHistoryCache[0].t.getTime()), yFor(depthHistoryCache[0].v));
+  for (const d of depthHistoryCache) depthCtx.lineTo(xFor(d.t.getTime()), yFor(d.v));
+  depthCtx.lineTo(xFor(tEnd), padT + plotH);
+  depthCtx.lineTo(xFor(tStart), padT + plotH);
+  depthCtx.closePath();
+  const grad = depthCtx.createLinearGradient(0, padT, 0, padT + plotH);
+  grad.addColorStop(0, depthColor + '55');
+  grad.addColorStop(1, depthColor + '00');
+  depthCtx.fillStyle = grad;
+  depthCtx.fill();
+
+  // line
+  depthCtx.beginPath();
+  depthCtx.moveTo(xFor(depthHistoryCache[0].t.getTime()), yFor(depthHistoryCache[0].v));
+  for (const d of depthHistoryCache) depthCtx.lineTo(xFor(d.t.getTime()), yFor(d.v));
+  depthCtx.strokeStyle = depthColor;
+  depthCtx.lineWidth = 2;
+  depthCtx.lineJoin = 'round';
+  depthCtx.shadowColor = depthColor;
+  depthCtx.shadowBlur = 8;
+  depthCtx.stroke();
+  depthCtx.shadowBlur = 0;
+
+  // range label + axis labels
+  document.getElementById('depthRangeValue').textContent = `${vMin.toFixed(1)} / ${vMax.toFixed(1)}`;
+  const startLabel = depthHistoryCache[0].t.toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric' });
+  document.getElementById('chartStartLabel').textContent = startLabel;
+  document.getElementById('chartEndLabel').textContent = 'now';
+}
+
+window.addEventListener('resize', () => { resizeChart(); });
+
+/* ================= Clock ================= */
 function updateClock() {
   const now = new Date();
   let h = now.getHours();
@@ -544,23 +690,18 @@ function updateClock() {
   document.getElementById('clockDisplay').textContent = `${h}:${m} ${ampm}`;
 }
 
+/* ================= Ambient particles ================= */
 const canvas = document.getElementById('particles');
 const ctx = canvas.getContext('2d');
 let particles = [];
-
-function resizeCanvas() {
-  canvas.width = window.innerWidth;
-  canvas.height = window.innerHeight;
-}
+function resizeCanvas() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
 function initParticles() {
   particles = [];
-  for (let i = 0; i < 60; i++) {
+  for (let i = 0; i < 50; i++) {
     particles.push({
-      x: Math.random() * canvas.width,
-      y: Math.random() * canvas.height,
+      x: Math.random() * canvas.width, y: Math.random() * canvas.height,
       r: Math.random() * 1.5 + 0.3,
-      vx: (Math.random() - 0.5) * 0.3,
-      vy: (Math.random() - 0.5) * 0.3 - 0.1,
+      vx: (Math.random() - 0.5) * 0.3, vy: (Math.random() - 0.5) * 0.3 - 0.1,
       alpha: Math.random() * 0.5 + 0.1,
     });
   }
@@ -581,6 +722,7 @@ function animateParticles() {
   requestAnimationFrame(animateParticles);
 }
 
+/* ================= Fullscreen ================= */
 function toggleFullscreen() {
   const el = document.documentElement;
   if (!document.fullscreenElement) {
@@ -597,7 +739,7 @@ document.addEventListener('webkitfullscreenchange', () => {
   if (!document.webkitFullscreenElement) document.getElementById('fsBtn').classList.remove('hidden');
 });
 
-window.addEventListener('resize', () => { resizeCanvas(); initParticles(); });
+buildGaugeBands();
 </script>
 </body>
 </html>
