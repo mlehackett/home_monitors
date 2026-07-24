@@ -70,22 +70,22 @@
   .dashboard {
     position: relative; z-index: 3; height: 100vh;
     display: grid;
-    grid-template-rows: auto 1fr;
+    grid-template-rows: 1fr;
     padding: 1.4rem 1.8rem 1.6rem;
-    gap: 0.9rem;
   }
 
-  .header { display: flex; align-items: baseline; justify-content: space-between; }
-  .header-title {
-    font-family: 'Bebas Neue', sans-serif; font-size: 1.25rem; letter-spacing: 0.22em;
-    color: var(--label); text-transform: uppercase; display: flex; align-items: center;
+  .top-bar {
+    position: fixed; top: 0.9rem; right: 1.8rem; z-index: 100;
+    display: flex; align-items: center; gap: 0.7rem;
+    background: rgba(0,0,0,0.4); border: 1px solid var(--border); border-radius: 20px;
+    padding: 0.35rem 0.7rem;
   }
-  .header-right { display: flex; align-items: center; gap: 0.9rem; }
-  .header-time { font-size: 0.72rem; color: var(--muted); letter-spacing: 0.1em; }
+  .header-time { font-size: 0.72rem; color: var(--label); letter-spacing: 0.1em; }
+  .top-bar .icon-btn { padding: 0.25rem 0.5rem; font-size: 0.75rem; }
 
   .status-dot {
     display: inline-block; width: 6px; height: 6px; background: var(--aqi-color);
-    border-radius: 50%; margin-right: 0.5rem; box-shadow: 0 0 6px var(--aqi-color);
+    border-radius: 50%; box-shadow: 0 0 6px var(--aqi-color);
     animation: pulse 2s ease-in-out infinite; transition: background 2s ease, box-shadow 2s ease;
   }
   @keyframes pulse { 0%,100% {opacity:1; transform:scale(1);} 50% {opacity:.5; transform:scale(.8);} }
@@ -163,7 +163,7 @@
   .details-label { font-size: 0.78rem; letter-spacing: 0.12em; color: var(--label); text-transform: uppercase; margin-bottom: 0.25rem; }
   .details-text {
     font-size: 0.82rem; color: var(--text); line-height: 1.4;
-    white-space: pre-line; max-height: 4.6em; overflow-y: auto;
+    white-space: pre-line; max-height: 9.5em; overflow-y: auto;
   }
 
   .panel-footer {
@@ -265,6 +265,12 @@
 
 <button class="icon-btn fullscreen-btn" id="fsBtn" onclick="toggleFullscreen()">⛶ FULLSCREEN</button>
 
+<div class="top-bar">
+  <span class="status-dot"></span>
+  <div class="header-time" id="clockDisplay">--:-- --</div>
+  <button class="icon-btn" onclick="toggleSettings()">⚙</button>
+</div>
+
 <div class="settings-panel" id="settingsPanel">
   <div class="settings-title">SETTINGS</div>
   <div class="settings-field">
@@ -279,14 +285,6 @@
 </div>
 
 <div class="dashboard">
-
-  <div class="header">
-    <div class="header-title"><span class="status-dot"></span>Environmental Monitor</div>
-    <div class="header-right">
-      <button class="icon-btn" onclick="toggleSettings()">⚙ SETTINGS</button>
-      <div class="header-time" id="clockDisplay">--:-- --</div>
-    </div>
-  </div>
 
   <div class="main-grid">
 
