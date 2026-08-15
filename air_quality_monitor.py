@@ -32,7 +32,7 @@ import neopixel
 
 SAMPLE_RATE = 10 # seconds between readings
 ROLLING_RATE = 2*60 # seconds of history in rolling averages
-UPDATE_RATE = 2*60 # seconds between internet updates
+UPDATE_RATE = 3*60 # seconds between internet updates
 update_pulse = int(UPDATE_RATE/SAMPLE_RATE)
 
 AQI_PIXELS = 6
@@ -104,22 +104,62 @@ def open_or_create_feeds():
         open_feeds()
 
 # Logging or posting functions
+def send_data(feed, data):
+    try:
+        io.send_data(feed["key"], data)
+    except (ConnectionError, OSError, RuntimeError) as e:
+        print(f"Network error: {e}")
+        wifi.radio.enabled = False
+        time.sleep(1)
+        wifi.radio.enabled = True
+        connect_wifi()
+        try:
+            io.send_data(feed["key"], data)
+        except Exception as e2:
+            print(f"Retry failed, skipping upload: {e2}")
+    except Exception as e:
+        print(f"Unexpected error: {e}")
+
+
 def send_to_log(message, feed):
     print(message)
-    io.send_data(feed["key"], message)
+    send_data(feed["key"], message)
 
-def send_data(avg_pm25, avg_pm10, avg_pm100, temp, humidity, level):
-    io.send_group_data(
-        group_key=aqi_group["key"],
-        feeds_and_data=[
-            {"key": "pm25", "value": avg_pm25},
-            {"key": "pm10", "value": avg_pm10},
-            {"key": "pm100", "value": avg_pm100},
-            {"key": "temp", "value": temp},
-            {"key": "humidity", "value": humidity},
-            {"key": "level", "value": level},
-        ]
-    )
+def send_group_data(avg_pm25, avg_pm10, avg_pm100, temp, humidity, level):
+    try:
+        io.send_group_data(
+            group_key=aqi_group["key"],
+            feeds_and_data=[
+                {"key": "pm25", "value": avg_pm25},
+                {"key": "pm10", "value": avg_pm10},
+                {"key": "pm100", "value": avg_pm100},
+                {"key": "temp", "value": temp},
+                {"key": "humidity", "value": humidity},
+                {"key": "level", "value": level},
+            ]
+        )
+    except (ConnectionError, OSError, RuntimeError) as e:
+        print(f"Network error: {e}")
+        wifi.radio.enabled = False
+        time.sleep(30)
+        wifi.radio.enabled = True
+        connect_wifi()
+        try:
+            io.send_group_data(
+                group_key=aqi_group["key"],
+                feeds_and_data=[
+                    {"key": "pm25", "value": avg_pm25},
+                    {"key": "pm10", "value": avg_pm10},
+                    {"key": "pm100", "value": avg_pm100},
+                    {"key": "temp", "value": temp},
+                    {"key": "humidity", "value": humidity},
+                    {"key": "level", "value": level},
+                ]
+            )
+        except Exception as e2:
+            print(f"Retry failed, skipping upload: {e2}")
+    except Exception as e:
+        print(f"Unexpected error: {e}")
 
 def send_details(aqdata):
     summary = "\n".join([
@@ -130,7 +170,7 @@ def send_details(aqdata):
         f"Particles > 5.0um / 0.1L air: {aqdata['particles 50um']}",
         f"Particles > 10 um / 0.1L air: {aqdata['particles 100um']}",
     ])
-    io.send_data(details_feed["key"], summary)
+    send_data(details_feed["key"], summary)
 
 def send_parameters_to_log():
     message = "\n".join([
@@ -138,7 +178,7 @@ def send_parameters_to_log():
         f"Seconds of history in rolling average: {ROLLING_RATE}",
         f"Seconds between internet uploads: {UPDATE_RATE}",
     ])
-    io.send_data(log_feed["key"], message)
+    send_data(log_feed["key"], message)
 
 def print_aq_data(aqdata):
     print()
@@ -210,12 +250,9 @@ pixels = neopixel.NeoPixel(board.D15, 8, brightness=0.4)
 # Set up io
 try:
     open_or_create_feeds()
+    pixels[NETWORK_PIXEL] = green
 except:  # wifi or AIO failure
-    while True:
-        pixels[NETWORK_PIXEL] = red
-        time.sleep(0.5)
-        pixels[NETWORK_PIXEL] = off
-        time.sleep(0.5)
+    pixels[NETWORK_PIXEL] = red
 
 
 
@@ -243,7 +280,12 @@ pm10_env = runningAverage(ROLLING_RATE/SAMPLE_RATE)
 pm100_env = runningAverage(ROLLING_RATE/SAMPLE_RATE)
 
 pixels[NETWORK_PIXEL] = blue  # health check that we've made it this far, and no upload has been done yet.
-send_parameters_to_log()
+try:
+    send_parameters_to_log()
+except Exception as e:
+    print('**** ERROR writing ****')
+    print('→', e)
+    pixels[NETWORK_PIXEL] = red
 
 while True:
     for i in range(update_pulse):
@@ -271,9 +313,11 @@ while True:
             avg_pm10 = pm10_env.update(aqdata["pm10 env"])
             avg_pm100 = pm100_env.update(aqdata["pm100 env"])
             level = find_epa_level(avg_pm25)
-            print(level.label, "(", avg_pm25, ")")
+            momentary_level = find_epa_level(aqdata["pm25 env"])
+            print("Rolling:", level.label, "(", avg_pm25, ")")
+            print("Now:", momentary_level.label, "(", aqdata["pm25 env"], ")")
             pixels[8 - AQI_PIXELS:] = [off]*AQI_PIXELS
-            pixels[8 - level.count:] = [level.color]*level.count
+            pixels[8 - momentary_level.count:] = [momentary_level.color]*momentary_level.count
             # pixels[:AQI_PIXELS] = [off]*AQI_PIXELS
             # pixels[:level.count] = [level.color]*level.count
         except RuntimeError:
@@ -290,7 +334,7 @@ while True:
     print("Sending data...")
     pixels[NETWORK_PIXEL] = off
     try:
-        send_data(avg_pm25, avg_pm10, avg_pm100, temp_f, humidity, level.label)
+        send_group_data(avg_pm25, avg_pm10, avg_pm100, temp_f, humidity, level.label)
         send_details(aqdata)
     except Exception as e:
         print('**** ERROR writing ****')
