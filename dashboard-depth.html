@@ -1,0 +1,629 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Environmental Monitor</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --aqi-color: #29b6f6;
+    --aqi-glow: rgba(41, 182, 246, 0.3);
+    --aqi-dim: rgba(41, 182, 246, 0.08);
+    --depth-color: #29b6f6;
+    --depth-glow: rgba(41, 182, 246, 0.35);
+    --bg: #060a0f;
+    --text: #e8f4f8;
+    --muted: rgba(232, 244, 248, 0.4);
+    --muted-dim: rgba(232, 244, 248, 0.22);
+    --label: rgba(232, 244, 248, 0.92);
+    --stale: #ff6e5e;
+    --card: rgba(0,0,0,0.45);
+    --border: rgba(255,255,255,0.07);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+  html, body { width: 100%; height: 100%; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Mono', monospace;
+    overflow: hidden;
+    cursor: none;
+  }
+
+  .horizon-photo {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    background-image: url('horizon.jpg');
+    background-size: cover;
+    background-position: center 55%;
+  }
+
+  .atmosphere { position: fixed; inset: 0; pointer-events: none; z-index: 1; }
+  .atmosphere::before {
+    content: ''; position: absolute; top: -20%; left: -10%; width: 55%; height: 55%;
+    background: radial-gradient(ellipse, var(--aqi-glow) 0%, transparent 70%);
+    transition: background 2s ease; animation: breathe 8s ease-in-out infinite;
+  }
+  .atmosphere::after {
+    content: ''; position: absolute; bottom: -15%; right: -10%; width: 55%; height: 55%;
+    background: radial-gradient(ellipse, var(--depth-glow) 0%, transparent 70%);
+    transition: background 2s ease; animation: breathe 9s ease-in-out infinite reverse;
+  }
+  @keyframes breathe {
+    0%, 100% { transform: scale(1); opacity: 0.65; }
+    50% { transform: scale(1.15); opacity: 1; }
+  }
+
+  canvas#particles { position: fixed; inset: 0; z-index: 2; opacity: 0.35; }
+
+  .dashboard {
+    position: relative; z-index: 3; height: 100vh;
+    display: grid;
+    grid-template-rows: 1fr;
+    padding: 1.4rem 1.8rem 1.6rem;
+  }
+
+  .top-bar {
+    position: fixed; top: 0.9rem; right: 1.8rem; z-index: 100;
+    display: flex; align-items: center; gap: 0.7rem;
+    background: rgba(0,0,0,0.4); border: 1px solid var(--border); border-radius: 20px;
+    padding: 0.35rem 0.7rem;
+  }
+  .header-time { font-size: 0.72rem; color: var(--label); letter-spacing: 0.1em; }
+  .top-bar .icon-btn { padding: 0.25rem 0.5rem; font-size: 0.75rem; }
+
+  .status-dot {
+    display: inline-block; width: 6px; height: 6px; background: var(--aqi-color);
+    border-radius: 50%; box-shadow: 0 0 6px var(--aqi-color);
+    animation: pulse 2s ease-in-out infinite; transition: background 2s ease, box-shadow 2s ease;
+  }
+  @keyframes pulse { 0%,100% {opacity:1; transform:scale(1);} 50% {opacity:.5; transform:scale(.8);} }
+
+  .main-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 1.1rem;
+    min-height: 0;
+  }
+
+  .panel {
+    /* dark behind the header, lighter through the middle, dark again at the bottom */
+    background: linear-gradient(to bottom,
+      rgba(0,0,0,0.62) 0%, rgba(0,0,0,0.40) 18%,
+      rgba(0,0,0,0.12) 40%, rgba(0,0,0,0.12) 60%,
+      rgba(0,0,0,0.55) 88%, rgba(0,0,0,0.62) 100%);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 1.1rem 1.3rem;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    backdrop-filter: blur(0px);
+    -webkit-backdrop-filter: blur(0px);
+  }
+
+  .panel-label {
+    font-family: 'Bebas Neue', sans-serif; font-size: 1.1rem; letter-spacing: 0.2em;
+    color: var(--label); text-transform: uppercase; margin-bottom: 0.4rem;
+  }
+
+  /* ---- Depth panel ---- */
+  .depth-panel { border-left: 2px solid var(--depth-color); transition: border-left-color 2s ease; }
+  .depth-top { display: flex; align-items: flex-end; justify-content: space-between; gap: 1rem; }
+  .depth-value-row { display: flex; align-items: baseline; gap: 0.5rem; }
+  .depth-value {
+    font-family: 'Bebas Neue', sans-serif; font-size: clamp(3.2rem, 7vw, 5rem);
+    line-height: 0.85; color: var(--depth-color); text-shadow: 0 0 40px var(--depth-glow);
+    transition: color 1s ease, text-shadow 1s ease;
+  }
+  .depth-unit { font-size: 0.85rem; color: var(--muted); letter-spacing: 0.05em; margin-bottom: 0.6rem; }
+  .depth-sub-metrics { display: flex; gap: 2.5rem; }
+  .mini-metric { display: flex; flex-direction: column; gap: 0.3rem; }
+  .mini-metric-label { font-size: 1rem; letter-spacing: 0.13em; color: var(--label); text-transform: uppercase; }
+  .mini-metric-value { font-family: 'Bebas Neue', sans-serif; font-size: clamp(2rem, 4vw, 3rem); line-height: 1; color: var(--text); }
+
+  .chart-wrap { flex: 1; min-height: 0; margin-top: 0.7rem; position: relative; }
+  .chart-wrap canvas { width: 100%; height: 100%; display: block; }
+
+  .panel-footer {
+    display: flex; justify-content: space-between; align-items: baseline;
+    border-top: 1px solid var(--border); margin-top: 0.7rem; padding-top: 0.5rem;
+    font-size: 0.7rem; letter-spacing: 0.06em; color: var(--muted);
+  }
+  .panel-footer span:last-child { font-family: 'DM Mono', monospace; color: var(--label); }
+  .panel-footer span.stale { color: var(--stale) !important; }
+
+  /* ---- Icon buttons ---- */
+  .icon-btn {
+    background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.12); border-radius: 8px;
+    color: var(--muted); font-family: 'DM Mono', monospace; font-size: 0.62rem; letter-spacing: 0.08em;
+    padding: 0.4rem 0.65rem; cursor: pointer; transition: opacity 0.3s ease; opacity: 0.55;
+  }
+  .icon-btn:hover, .icon-btn:active { opacity: 1; }
+  .fullscreen-btn { position: fixed; bottom: 1rem; right: 1rem; z-index: 100; }
+  .fullscreen-btn.hidden { opacity: 0; pointer-events: none; }
+
+  /* ---- Settings panel ---- */
+  .settings-panel {
+    position: fixed; top: 3.2rem; right: 1.8rem; z-index: 200;
+    background: rgba(6,10,15,0.96); border: 1px solid var(--border); border-radius: 12px;
+    padding: 1rem 1.1rem; width: 220px; display: none; flex-direction: column; gap: 0.7rem;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+  }
+  .settings-panel.open { display: flex; }
+  .settings-title { font-family: 'Bebas Neue', sans-serif; letter-spacing: 0.15em; font-size: 0.75rem; color: var(--muted); }
+  .settings-field { display: flex; flex-direction: column; gap: 0.3rem; }
+  .settings-field label { font-size: 0.6rem; color: var(--muted); letter-spacing: 0.05em; }
+  .settings-field input {
+    background: rgba(255,255,255,0.05); border: 1px solid var(--border); border-radius: 6px;
+    color: var(--text); font-family: 'DM Mono', monospace; font-size: 0.85rem; padding: 0.4rem 0.5rem;
+  }
+  .settings-save {
+    background: var(--depth-color); color: #04121a; border: none; border-radius: 6px;
+    font-family: 'Bebas Neue', sans-serif; letter-spacing: 0.1em; font-size: 0.8rem;
+    padding: 0.5rem; cursor: pointer;
+  }
+
+  /* ---- Login screen (shared credentials) ---- */
+  .login-screen {
+    position: fixed; inset: 0; z-index: 1000; background: rgba(6,10,15,0.97);
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1.5rem;
+  }
+  .login-screen.hidden { display: none; }
+  .login-title { font-family: 'Bebas Neue', sans-serif; font-size: 1.6rem; letter-spacing: 0.15em; color: var(--text); }
+  .login-subtitle { font-size: 0.75rem; color: var(--muted); letter-spacing: 0.08em; margin-top: -1rem; }
+  .login-form { display: flex; flex-direction: column; gap: 0.9rem; width: 260px; }
+  .login-field { display: flex; flex-direction: column; gap: 0.35rem; }
+  .login-field label { font-size: 0.62rem; color: var(--muted); letter-spacing: 0.08em; }
+  .login-field input {
+    background: rgba(255,255,255,0.05); border: 1px solid var(--border); border-radius: 8px;
+    color: var(--text); font-family: 'DM Mono', monospace; font-size: 0.9rem; padding: 0.6rem 0.7rem;
+  }
+  .login-btn {
+    background: var(--aqi-color); color: #04120a; border: none; border-radius: 8px;
+    font-family: 'Bebas Neue', sans-serif; letter-spacing: 0.1em; font-size: 0.95rem;
+    padding: 0.65rem; cursor: pointer; margin-top: 0.3rem;
+  }
+  .login-error { font-size: 0.62rem; color: #f44336; letter-spacing: 0.05em; text-align: center; min-height: 1em; }
+  .login-reset {
+    font-size: 0.6rem; color: var(--muted); letter-spacing: 0.08em; cursor: pointer;
+    text-decoration: underline; background: none; border: none; font-family: 'DM Mono', monospace;
+  }
+</style>
+</head>
+<body>
+
+<div class="login-screen" id="loginScreen">
+  <div class="login-title">Environmental Monitor</div>
+  <div class="login-subtitle">Enter your Adafruit IO credentials</div>
+  <div class="login-form">
+    <div class="login-field">
+      <label>Adafruit IO Username</label>
+      <input type="text" id="loginUser" placeholder="your_username" autocomplete="off" autocapitalize="none"/>
+    </div>
+    <div class="login-field">
+      <label>Adafruit IO Key</label>
+      <input type="password" id="loginKey" placeholder="aio_xxxxxxxxxxxx" autocomplete="off" autocapitalize="none"/>
+    </div>
+    <div class="login-error" id="loginError"></div>
+    <button class="login-btn" onclick="doLogin()">Connect</button>
+  </div>
+  <button class="login-reset" onclick="resetCredentials()">clear saved credentials</button>
+</div>
+
+<div class="horizon-photo"></div>
+<div class="atmosphere"></div>
+<canvas id="particles"></canvas>
+
+<button class="icon-btn fullscreen-btn" id="fsBtn" onclick="toggleFullscreen()">⛶ FULLSCREEN</button>
+
+<div class="top-bar">
+  <span class="status-dot"></span>
+  <div class="header-time" id="clockDisplay">--:-- --</div>
+  <button class="icon-btn" onclick="toggleSettings()">⚙</button>
+</div>
+
+<div class="settings-panel" id="settingsPanel">
+  <div class="settings-title">SETTINGS</div>
+  <div class="settings-field">
+    <label>Depth offset (ft) — added to sensor reading</label>
+    <input type="number" step="0.1" id="depthOffsetInput">
+  </div>
+  <div class="settings-field">
+    <label>Refresh interval (sec)</label>
+    <input type="number" step="5" id="refreshIntervalInput">
+  </div>
+  <button class="settings-save" onclick="saveSettings()">Save</button>
+</div>
+
+<div class="dashboard">
+
+  <div class="main-grid">
+
+    <!-- DEPTH PANEL -->
+    <div class="panel depth-panel">
+      <div class="panel-label">River Depth</div>
+      <div class="depth-top">
+        <div class="depth-value-row">
+          <div class="depth-value" id="depthValue">–.–</div>
+          <div class="depth-unit">FT</div>
+        </div>
+        <div class="depth-sub-metrics">
+          <div class="mini-metric">
+            <div class="mini-metric-label">Water Temp</div>
+            <div class="mini-metric-value" id="waterTempValue">–.–°F</div>
+          </div>
+          <div class="mini-metric">
+            <div class="mini-metric-label">48H Range</div>
+            <div class="mini-metric-value" id="depthRangeValue">–.– / –.–</div>
+          </div>
+        </div>
+      </div>
+      <div class="chart-wrap">
+        <canvas id="depthChart"></canvas>
+      </div>
+      <div class="panel-footer">
+        <span>Last update (sensor_depth)</span>
+        <span id="depthLastUpdate">–</span>
+      </div>
+    </div>
+
+
+  </div>
+</div>
+
+<script>
+/* ================= CONFIG ================= */
+const CONFIG = {
+  refreshIntervalMs: 60000,
+  depthHistoryHours: 48,
+  depthOffsetFt: 18,        // actual river depth = sensor_depth + this offset (editable via Settings)
+  staleAfterMs: 15 * 60 * 1000, // flag a panel's Last Update as stale after this long
+  feeds: {
+    depth: 'depth.sensor-depth',
+    waterTemp: 'depth.water-temperature',
+  }
+};
+
+// Load any saved overrides
+(function loadConfigOverrides() {
+  const savedOffset = localStorage.getItem('depthOffsetFt');
+  if (savedOffset !== null) CONFIG.depthOffsetFt = parseFloat(savedOffset);
+  const savedInterval = localStorage.getItem('refreshIntervalMs');
+  if (savedInterval !== null) CONFIG.refreshIntervalMs = parseInt(savedInterval, 10);
+})();
+
+let AIO_KEY = '';
+let AIO_USER = '';
+
+/* ================= Login / credentials ================= */
+function doLogin() {
+  const user = document.getElementById('loginUser').value.trim();
+  const key  = document.getElementById('loginKey').value.trim();
+  if (!user || !key) {
+    document.getElementById('loginError').textContent = 'Both fields are required.';
+    return;
+  }
+  AIO_USER = user; AIO_KEY = key;
+  localStorage.setItem('aio_user', user);
+  localStorage.setItem('aio_key', key);
+  document.getElementById('loginScreen').classList.add('hidden');
+  startDashboard();
+}
+function resetCredentials() {
+  localStorage.removeItem('aio_user');
+  localStorage.removeItem('aio_key');
+  document.getElementById('loginUser').value = '';
+  document.getElementById('loginKey').value = '';
+  document.getElementById('loginError').textContent = '';
+  document.getElementById('loginScreen').classList.remove('hidden');
+}
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !document.getElementById('loginScreen').classList.contains('hidden')) doLogin();
+});
+window.addEventListener('load', () => {
+  const user = localStorage.getItem('aio_user');
+  const key  = localStorage.getItem('aio_key');
+  if (user && key) {
+    AIO_USER = user; AIO_KEY = key;
+    document.getElementById('loginScreen').classList.add('hidden');
+    startDashboard();
+  }
+});
+
+/* ================= Settings panel ================= */
+function toggleSettings() {
+  const panel = document.getElementById('settingsPanel');
+  document.getElementById('depthOffsetInput').value = CONFIG.depthOffsetFt;
+  document.getElementById('refreshIntervalInput').value = CONFIG.refreshIntervalMs / 1000;
+  panel.classList.toggle('open');
+}
+function saveSettings() {
+  const offset = parseFloat(document.getElementById('depthOffsetInput').value);
+  const interval = parseInt(document.getElementById('refreshIntervalInput').value, 10);
+  if (!isNaN(offset)) { CONFIG.depthOffsetFt = offset; localStorage.setItem('depthOffsetFt', offset); }
+  if (!isNaN(interval) && interval > 0) {
+    CONFIG.refreshIntervalMs = interval * 1000;
+    localStorage.setItem('refreshIntervalMs', CONFIG.refreshIntervalMs);
+  }
+  document.getElementById('settingsPanel').classList.remove('open');
+  refresh(); refreshDepthHistory();
+}
+
+/* ================= Dashboard bootstrap ================= */
+function startDashboard() {
+  resizeCanvas(); initParticles(); animateParticles();
+  resizeChart();
+  updateClock(); setInterval(updateClock, 1000);
+  refresh(); refreshDepthHistory();
+  setInterval(refresh, CONFIG.refreshIntervalMs);
+  setInterval(refreshDepthHistory, CONFIG.refreshIntervalMs);
+}
+
+/* ================= Fetch helpers ================= */
+async function fetchLastRaw(feed) {
+  const r = await fetch(`https://io.adafruit.com/api/v2/${AIO_USER}/feeds/${feed}/data/last`, {
+    headers: { 'X-AIO-Key': AIO_KEY }
+  });
+  if (!r.ok) throw new Error(`HTTP ${r.status} on ${feed}`);
+  const json = await r.json();
+  return { value: json.value, createdAt: new Date(json.created_at) };
+}
+async function fetchLast(feed) {
+  return parseFloat((await fetchLastRaw(feed)).value);
+}
+async function fetchHistory(feed, hours) {
+  // Deliberately omit start_time: with it, Adafruit IO returns oldest-first and a
+  // limit=1000 cap can get used up before reaching "now" if the feed logged fast at
+  // any point in the window. Without it, results come back newest-first, so if we
+  // ever have to truncate, it's the oldest edge that gets clipped, not the current one.
+  const url = `https://io.adafruit.com/api/v2/${AIO_USER}/feeds/${feed}/data?limit=1000`;
+  const r = await fetch(url, { headers: { 'X-AIO-Key': AIO_KEY } });
+  if (!r.ok) throw new Error(`HTTP ${r.status} on ${feed} history`);
+  const data = await r.json();
+  const cutoff = Date.now() - hours * 3600 * 1000;
+  return data
+    .map(d => ({ t: new Date(d.created_at), v: parseFloat(d.value) }))
+    .filter(d => !isNaN(d.v) && d.t.getTime() >= cutoff)
+    .sort((a, b) => a.t - b.t);
+}
+
+/* ================= Point-in-time refresh (water temp + depth current) ================= */
+function renderLastUpdate(elId, createdAt) {
+  const el = document.getElementById(elId);
+  el.textContent = createdAt.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', second: '2-digit' });
+  const age = Date.now() - createdAt.getTime();
+  el.classList.toggle('stale', age > CONFIG.staleAfterMs);
+}
+
+async function refresh() {
+  try {
+    const [depthRaw, waterTemp] = await Promise.all([
+      fetchLastRaw(CONFIG.feeds.depth), fetchLast(CONFIG.feeds.waterTemp),
+    ]);
+    const riverDepth = parseFloat(depthRaw.value) + CONFIG.depthOffsetFt;
+    document.getElementById('depthValue').textContent = riverDepth.toFixed(1);
+    document.getElementById('waterTempValue').textContent = waterTemp.toFixed(1) + '\u00b0F';
+    renderLastUpdate('depthLastUpdate', depthRaw.createdAt);
+  } catch (e) { console.error('Fetch error:', e); }
+}
+
+/* ================= 48h depth history + chart ================= */
+let depthHistoryCache = [];
+
+async function refreshDepthHistory() {
+  try {
+    const raw = await fetchHistory(CONFIG.feeds.depth, CONFIG.depthHistoryHours);
+    depthHistoryCache = raw.map(d => ({ t: d.t, v: d.v + CONFIG.depthOffsetFt }));
+    drawDepthChart();
+  } catch (e) { console.error('History fetch error:', e); }
+}
+
+const depthCanvas = document.getElementById('depthChart');
+const depthCtx = depthCanvas.getContext('2d');
+
+function resizeChart() {
+  const wrap = depthCanvas.parentElement;
+  const dpr = window.devicePixelRatio || 1;
+  depthCanvas.width = wrap.clientWidth * dpr;
+  depthCanvas.height = wrap.clientHeight * dpr;
+  depthCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  drawDepthChart();
+}
+
+function drawDepthChart() {
+  const w = depthCanvas.clientWidth, h = depthCanvas.clientHeight;
+  depthCtx.clearRect(0, 0, w, h);
+  if (depthHistoryCache.length < 2) return;
+
+  const padL = 46, padR = 10, padT = 12, padB = 22;
+  const plotW = w - padL - padR, plotH = h - padT - padB;
+
+  const values = depthHistoryCache.map(d => d.v);
+  let vMin = Math.min(...values), vMax = Math.max(...values);
+  if (vMax - vMin < 0.5) { vMin -= 0.5; vMax += 0.5; }
+  const vPad = (vMax - vMin) * 0.12;
+  vMin -= vPad; vMax += vPad;
+
+  const tStart = depthHistoryCache[0].t.getTime();
+  const tEnd = depthHistoryCache[depthHistoryCache.length - 1].t.getTime();
+  const tSpan = Math.max(1, tEnd - tStart);
+
+  const xFor = t => padL + ((t - tStart) / tSpan) * plotW;
+  const yFor = v => padT + (1 - (v - vMin) / (vMax - vMin)) * plotH;
+
+  const depthColor = getComputedStyle(document.documentElement).getPropertyValue('--depth-color').trim() || '#29b6f6';
+  const labelColor = getComputedStyle(document.documentElement).getPropertyValue('--label').trim() || 'rgba(232,244,248,0.9)';
+  const mutedColor = getComputedStyle(document.documentElement).getPropertyValue('--muted').trim() || 'rgba(232,244,248,0.4)';
+
+  // ---- Y axis: gridlines + value labels ----
+  depthCtx.font = "12px 'DM Mono', monospace";
+  depthCtx.textBaseline = 'middle';
+  for (let i = 0; i <= 2; i++) {
+    const v = vMin + (vMax - vMin) * (i / 2);
+    const y = yFor(v);
+    depthCtx.strokeStyle = 'rgba(255,255,255,0.08)';
+    depthCtx.lineWidth = 1;
+    depthCtx.beginPath();
+    depthCtx.moveTo(padL, y);
+    depthCtx.lineTo(w - padR, y);
+    depthCtx.stroke();
+    depthCtx.fillStyle = labelColor;
+    depthCtx.textAlign = 'right';
+    depthCtx.fillText(v.toFixed(1), padL - 8, y);
+  }
+  // Y axis unit label
+  depthCtx.save();
+  depthCtx.translate(12, padT + plotH / 2);
+  depthCtx.rotate(-Math.PI / 2);
+  depthCtx.textAlign = 'center';
+  depthCtx.font = "11px 'DM Mono', monospace";
+  depthCtx.fillStyle = mutedColor;
+  depthCtx.fillText('FEET', 0, 0);
+  depthCtx.restore();
+
+  // ---- X axis: gridlines every 3h, labels every 6h (aligned to LOCAL calendar hours) ----
+  function alignedHourTicks(startMs, endMs, stepHours) {
+    const d = new Date(startMs);
+    d.setMinutes(0, 0, 0);
+    d.setHours(Math.floor(d.getHours() / stepHours) * stepHours);
+    if (d.getTime() < startMs) d.setHours(d.getHours() + stepHours);
+    const ticks = [];
+    while (d.getTime() <= endMs) {
+      ticks.push(new Date(d));
+      d.setHours(d.getHours() + stepHours);
+    }
+    return ticks;
+  }
+
+  depthCtx.textAlign = 'center';
+  depthCtx.textBaseline = 'top';
+  for (const d of alignedHourTicks(tStart, tEnd, 3)) {
+    const t = d.getTime();
+    const x = xFor(t);
+    const isLabeled = d.getHours() % 6 === 0;
+    depthCtx.strokeStyle = isLabeled ? 'rgba(255,255,255,0.09)' : 'rgba(255,255,255,0.04)';
+    depthCtx.lineWidth = 1;
+    depthCtx.beginPath();
+    depthCtx.moveTo(x, padT);
+    depthCtx.lineTo(x, padT + plotH);
+    depthCtx.stroke();
+    if (isLabeled) {
+      const timeLabel = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+      const label = (d.getHours() === 0)
+        ? d.toLocaleDateString([], { month: 'short', day: 'numeric' })
+        : timeLabel;
+      depthCtx.font = "10.5px 'DM Mono', monospace";
+      depthCtx.fillStyle = labelColor;
+      depthCtx.fillText(label, x, padT + plotH + 6);
+    }
+  }
+  // "now" marker at the right edge
+  depthCtx.fillStyle = mutedColor;
+  depthCtx.textAlign = 'right';
+  depthCtx.fillText('now', w - padR, padT + plotH + 6);
+
+  // area fill
+  depthCtx.beginPath();
+  depthCtx.moveTo(xFor(depthHistoryCache[0].t.getTime()), yFor(depthHistoryCache[0].v));
+  for (const d of depthHistoryCache) depthCtx.lineTo(xFor(d.t.getTime()), yFor(d.v));
+  depthCtx.lineTo(xFor(tEnd), padT + plotH);
+  depthCtx.lineTo(xFor(tStart), padT + plotH);
+  depthCtx.closePath();
+  // dark shade under the curve so the photo stays readable below the line
+  const shade = depthCtx.createLinearGradient(0, padT, 0, padT + plotH);
+  shade.addColorStop(0, 'rgba(0,0,0,0.15)');
+  shade.addColorStop(1, 'rgba(0,0,0,0.55)');
+  depthCtx.fillStyle = shade;
+  depthCtx.fill();
+  // blue tint on top of the shade
+  const grad = depthCtx.createLinearGradient(0, padT, 0, padT + plotH);
+  grad.addColorStop(0, depthColor + '55');
+  grad.addColorStop(1, depthColor + '00');
+  depthCtx.fillStyle = grad;
+  depthCtx.fill();
+
+  // line
+  depthCtx.beginPath();
+  depthCtx.moveTo(xFor(depthHistoryCache[0].t.getTime()), yFor(depthHistoryCache[0].v));
+  for (const d of depthHistoryCache) depthCtx.lineTo(xFor(d.t.getTime()), yFor(d.v));
+  depthCtx.strokeStyle = depthColor;
+  depthCtx.lineWidth = 2;
+  depthCtx.lineJoin = 'round';
+  depthCtx.shadowColor = depthColor;
+  depthCtx.shadowBlur = 8;
+  depthCtx.stroke();
+  depthCtx.shadowBlur = 0;
+
+  document.getElementById('depthRangeValue').textContent = `${vMin.toFixed(1)} / ${vMax.toFixed(1)}`;
+}
+
+window.addEventListener('resize', () => { resizeChart(); });
+
+/* ================= Clock ================= */
+function updateClock() {
+  const now = new Date();
+  let h = now.getHours();
+  const m = String(now.getMinutes()).padStart(2, '0');
+  const ampm = h >= 12 ? 'PM' : 'AM';
+  h = h % 12 || 12;
+  document.getElementById('clockDisplay').textContent = `${h}:${m} ${ampm}`;
+}
+
+/* ================= Ambient particles ================= */
+const canvas = document.getElementById('particles');
+const ctx = canvas.getContext('2d');
+let particles = [];
+function resizeCanvas() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
+function initParticles() {
+  particles = [];
+  for (let i = 0; i < 50; i++) {
+    particles.push({
+      x: Math.random() * canvas.width, y: Math.random() * canvas.height,
+      r: Math.random() * 1.5 + 0.3,
+      vx: (Math.random() - 0.5) * 0.3, vy: (Math.random() - 0.5) * 0.3 - 0.1,
+      alpha: Math.random() * 0.5 + 0.1,
+    });
+  }
+}
+function animateParticles() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  const color = getComputedStyle(document.documentElement).getPropertyValue('--aqi-color').trim();
+  for (const p of particles) {
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+    ctx.fillStyle = color + Math.round(p.alpha * 255).toString(16).padStart(2, '0');
+    ctx.fill();
+    p.x += p.vx; p.y += p.vy;
+    if (p.y < -5) p.y = canvas.height + 5;
+    if (p.x < -5) p.x = canvas.width + 5;
+    if (p.x > canvas.width + 5) p.x = -5;
+  }
+  requestAnimationFrame(animateParticles);
+}
+
+/* ================= Fullscreen ================= */
+function toggleFullscreen() {
+  const el = document.documentElement;
+  if (!document.fullscreenElement) {
+    (el.requestFullscreen || el.webkitRequestFullscreen || el.mozRequestFullScreen).call(el);
+    document.getElementById('fsBtn').classList.add('hidden');
+  } else {
+    (document.exitFullscreen || document.webkitExitFullscreen || document.mozCancelFullScreen).call(document);
+  }
+}
+document.addEventListener('fullscreenchange', () => {
+  if (!document.fullscreenElement) document.getElementById('fsBtn').classList.remove('hidden');
+});
+document.addEventListener('webkitfullscreenchange', () => {
+  if (!document.webkitFullscreenElement) document.getElementById('fsBtn').classList.remove('hidden');
+});
+
+</script>
+</body>
+</html>
