@@ -103,8 +103,8 @@
     display: flex;
     flex-direction: column;
     min-height: 0;
-    backdrop-filter: blur(0px);
-    -webkit-backdrop-filter: blur(0px);
+    backdrop-filter: blur(2px);
+    -webkit-backdrop-filter: blur(2px);
   }
 
   .panel-label {
@@ -427,18 +427,35 @@ async function refreshDepthHistory() {
 const depthCanvas = document.getElementById('depthChart');
 const depthCtx = depthCanvas.getContext('2d');
 
-function resizeChart() {
-  const wrap = depthCanvas.parentElement;
+// Match the canvas's pixel buffer to its on-screen size. Called at the start of every
+// draw, so the chart self-corrects even if the layout changed without a window 'resize'
+// event (Kindle system bars, waking from sleep, late-loading fonts, etc.).
+function syncCanvasSize() {
   const dpr = window.devicePixelRatio || 1;
-  depthCanvas.width = wrap.clientWidth * dpr;
-  depthCanvas.height = wrap.clientHeight * dpr;
+  const w = Math.round(depthCanvas.clientWidth * dpr);
+  const h = Math.round(depthCanvas.clientHeight * dpr);
+  if (depthCanvas.width !== w || depthCanvas.height !== h) {
+    depthCanvas.width = w;
+    depthCanvas.height = h;
+  }
+  // Clear the whole buffer, then draw in CSS pixels
+  depthCtx.setTransform(1, 0, 0, 1, 0, 0);
+  depthCtx.clearRect(0, 0, depthCanvas.width, depthCanvas.height);
   depthCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+
+function resizeChart() {
   drawDepthChart();
 }
 
+// Redraw whenever the chart area itself changes size, not just the window
+if (typeof ResizeObserver !== 'undefined') {
+  new ResizeObserver(() => drawDepthChart()).observe(depthCanvas.parentElement);
+}
+
 function drawDepthChart() {
+  syncCanvasSize();
   const w = depthCanvas.clientWidth, h = depthCanvas.clientHeight;
-  depthCtx.clearRect(0, 0, w, h);
   if (depthHistoryCache.length < 2) return;
 
   const padL = 46, padR = 10, padT = 12, padB = 22;
